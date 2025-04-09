@@ -3,6 +3,9 @@ require 'rake/clean'
 require 'parallel'
 
 PROBLEM_NAME = 'solver'
+COMMAND = './solver'
+INPUT_FILE_PATH = 'in'
+OUTPUT_FILE_PATH = 'out'
 SEED = 0
 CLEAN.include %w(data/* *.gcda *.gcov *.gcno *.png)
 
@@ -22,8 +25,7 @@ end
 
 desc 'check single'
 task one: [:compile] do
-  sh("./#{PROBLEM_NAME} < in/%04d.txt > out/%04d.txt" % [SEED, SEED])
-  sh("target/release/vis in/%04d.txt out/%04d.txt" % [SEED, SEED])
+  sh("./target/release/tester #{COMMAND} < #{INPUT_FILE_PATH}/%04d.txt > #{OUTPUT_FILE_PATH}/%04d.txt" % [SEED, SEED])
 end
 
 desc "example test"
@@ -49,8 +51,7 @@ end
 def run_test(seeds, options = "")
   results = Parallel.map(seeds, in_processes: 4) do |seed|
     print "\rseed = #{seed}"
-    data = Open3.capture3("./#{PROBLEM_NAME} < in/%04d.txt > out/%04d.txt" % [seed, seed])
-    data += Open3.capture3("target/release/vis in/%04d.txt out/%04d.txt" % [seed, seed])
+    data = Open3.capture3("./target/release/tester #{COMMAND} < #{INPUT_FILE_PATH}/%04d.txt > #{OUTPUT_FILE_PATH}/%04d.txt" % [seed, seed])
     [seed, data]
   end.to_h
 
