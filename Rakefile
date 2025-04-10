@@ -1,4 +1,5 @@
 require 'open3'
+require 'timeout'
 require 'rake/clean'
 require 'parallel'
 
@@ -46,12 +47,42 @@ task production: [:compile] do
   run_test(0..999)
 end
 
+# タイムアウト付きでコマンドを実行して結果を返す
+def capture_with_timeout(cmd, timeout_sec)
+  Open3.popen3(cmd) do |stdin, stdout, stderr, thread|
+    begin
+      # timeout_sec 秒以内に終了しなければTimeout::Errorになる
+      Timeout.timeout(timeout_sec) do
+        thread.value  # プロセス終了待ち
+      end
+    rescue Timeout::Error
+      # 外部プロセスを kill しておかないと生き続ける可能性がある
+      Process.kill('TERM', thread.pid) rescue nil
+      # 必要に応じてさらに強制的に kill したい場合は KILL シグナルも
+      # Process.kill('KILL', thread.pid) rescue nil
+      return [
+        "",
+        "ERROR: Command '#{cmd}' timed out after #{timeout_sec} seconds."
+      ]
+    end
+
+    # 正常終了した場合の標準出力・標準エラーを読み込む
+    out = stdout.read
+    err = stderr.read
+    [out, err]
+  end
+end
+
 def run_test(seeds, options = "")
   results = Parallel.map(seeds, in_processes: 4) do |seed|
     print "\rseed = #{seed}"
-    data = Open3.capture3("./#{PROBLEM_NAME} < in/%04d.txt > out/%04d.txt" % [seed, seed])
-    data += Open3.capture3("target/release/vis in/%04d.txt out/%04d.txt" % [seed, seed])
-    [seed, data]
+
+    cmd1 = "./#{PROBLEM_NAME} < in/%04d.txt > out/%04d.txt" % [seed, seed]
+    cmd2 = "target/release/vis in/%04d.txt out/%04d.txt" % [seed, seed]
+
+    out1, err1 = capture_with_timeout(cmd1, 2)
+    out2, err2 = capture_with_timeout(cmd2, 2)
+    [seed, [out1, err1, out2, err2]]
   end.to_h
 
   File.open("result.txt", "w") do |file|
