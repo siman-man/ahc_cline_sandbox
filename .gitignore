@@ -1,5 +1,6 @@
 *.txt
 *.html
+*.svg
 solver
 data/
 target/
